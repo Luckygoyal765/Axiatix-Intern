@@ -1,4 +1,21 @@
+// controllers/goats.js
 const db = require('../config/db');
+
+// --- Helper function to Promisify db.query (Crucial for async/await) ---
+// This is needed if your 'db' object's .query method does not natively return Promises.
+// If your 'db' object already returns Promises (e.g., from 'mysql2/promise' or 'pg'),
+// you can remove this helper and directly 'await db.query(...)'.
+const queryPromise = (sql, params) => {
+    return new Promise((resolve, reject) => {
+        db.query(sql, params, (err, results) => {
+            if (err) {
+                return reject(err);
+            }
+            resolve(results);
+        });
+    });
+};
+// --- End Helper Function ---
 
 const parseBoolean = (val) => {
     if (typeof val === 'boolean') return val;
@@ -162,21 +179,31 @@ const getPurchases = (req, res) => {
 
 const addHealthRecord = (req, res) => {
     const userId = req.user.userId;
-    const { goat_id, condition, treatment } = req.body;
+    const { goat_id, health_type, description, veterinarian, date_checked, next_due_date, status } = req.body;
+
+    // Basic validation
+    if (!goat_id || !health_type || !date_checked || !status) {
+        return res.status(400).json({ message: 'Required health record fields missing.' });
+    }
 
     db.query(
-        `INSERT INTO health_records (goat_id, user_id, condition, treatment, recorded_at) VALUES (?, ?, ?, ?, NOW())`,
-        [goat_id, userId, condition, treatment],
+        `INSERT INTO goat_health_records (goat_id, health_type, description, veterinarian, date_checked, next_due_date, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [goat_id, health_type, description || null, veterinarian || null, date_checked, next_due_date || null, status],
         (err) => {
-            if (err) return res.status(500).json({ message: 'Failed to add health record', error: err.message });
+            if (err) {
+                console.error('Error adding health record:', err);
+                return res.status(500).json({ message: 'Failed to add health record', error: err.message });
+            }
             res.status(201).json({ message: 'Health record added successfully' });
         }
     );
 };
 
+
 const getHealthRecords = (req, res) => {
     const goatId = req.params.goatId;
-    db.query('SELECT * FROM health_records WHERE goat_id = ?', [goatId], (err, results) => {
+    db.query('SELECT * FROM goat_health_records WHERE goat_id = ?', [goatId], (err, results) => {
         if (err) return res.status(500).json({ message: 'Failed to fetch health records', error: err.message });
         res.json(results);
     });
@@ -184,32 +211,96 @@ const getHealthRecords = (req, res) => {
 
 const updateHealthRecord = (req, res) => {
     const recordId = req.params.id;
-    const { condition, treatment } = req.body;
+    const { health_type, description, veterinarian, date_checked, next_due_date, status } = req.body;
+
+    // Basic validation
+    if (!health_type || !date_checked || !status) {
+        return res.status(400).json({ message: 'Required health record fields missing for update.' });
+    }
 
     db.query(
-        'UPDATE health_records SET condition = ?, treatment = ? WHERE id = ?',
-        [condition, treatment, recordId],
+        `UPDATE goat_health_records SET health_type = ?, description = ?, veterinarian = ?, date_checked = ?, next_due_date = ?, status = ? WHERE id = ?`,
+        [health_type, description || null, veterinarian || null, date_checked, next_due_date || null, status, recordId],
         (err) => {
-            if (err) return res.status(500).json({ message: 'Failed to update health record', error: err.message });
+            if (err) {
+                console.error('Error updating health record:', err);
+                return res.status(500).json({ message: 'Failed to update health record', error: err.message });
+            }
             res.json({ message: 'Health record updated successfully' });
         }
     );
 };
 
+
 const deleteHealthRecord = (req, res) => {
     const recordId = req.params.id;
 
-    db.query('DELETE FROM health_records WHERE id = ?', [recordId], (err) => {
+    db.query('DELETE FROM goat_health_records WHERE id = ?', [recordId], (err) => {
         if (err) return res.status(500).json({ message: 'Failed to delete health record', error: err.message });
         res.json({ message: 'Health record deleted successfully' });
     });
 };
 
-const getAllHealthRecords = (req, res) => {
-    db.query('SELECT * FROM health_records ORDER BY recorded_at DESC', (err, results) => {
-        if (err) return res.status(500).json({ message: 'Failed to fetch all health records', error: err.message });
-        res.json(results);
-    });
+// MODIFIED getAllHealthRecords function
+const getAllHealthRecords = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        // 1. Get total count
+        const countSql = `SELECT COUNT(*) AS total FROM goat_health_records`;
+        const countResult = await queryPromise(countSql); // Using the promisified query
+
+        // Determine how to access the total count based on your DB client (e.g., mysql2 vs pg)
+        const totalRecords = countResult[0] && countResult[0].total !== undefined // For mysql2 array of arrays or if results is direct array
+            ? parseInt(countResult[0].total)
+            : (countResult.rows && countResult.rows[0] && countResult.rows[0].total !== undefined // For pg result object
+                ? parseInt(countResult.rows[0].total)
+                : 0); // Default to 0 if no results or total property missing
+
+
+        // 2. Get paginated health records with goat details
+        const recordsSql = `
+            SELECT
+                gh.id,
+                gh.goat_id,
+                g.goat_number,
+                g.breed,
+                gh.date_checked,
+                gh.health_type,
+                gh.description,
+                gh.veterinarian,
+                gh.next_due_date,
+                gh.status,
+                gh.created_at
+            FROM
+                goat_health_records gh
+            JOIN
+                goats g ON gh.goat_id = g.id
+            ORDER BY gh.created_at DESC
+            LIMIT ? OFFSET ?; -- Use ? for MySQL, $1, $2 for PostgreSQL
+        `;
+
+        const recordsResult = await queryPromise(recordsSql, [limit, offset]); // Using the promisified query
+
+        // Determine how to access the records array based on your DB client
+        const records = recordsResult.rows ? recordsResult.rows : recordsResult; // For pg vs mysql2
+
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        res.status(200).json({
+            success: true,
+            records: records,
+            currentPage: page,
+            totalPages: totalPages,
+            totalRecords: totalRecords,
+        });
+
+    } catch (error) {
+        console.error("❌ Error in getAllHealthRecords:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error while fetching health records." });
+    }
 };
 
 module.exports = {

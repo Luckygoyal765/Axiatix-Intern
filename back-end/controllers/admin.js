@@ -38,7 +38,29 @@ const approveSeller = (req, res) => {
     });
 };
 
+
+// ... (existing listCustomers and approveSeller functions)
+
+const rejectSeller = (req, res) => {
+    const userId = req.params.userId;
+
+    const sql = 'UPDATE customers SET can_sell = 0 WHERE user_id = ?'; // Set to 0 for reject
+    db.query(sql, [userId], (err, result) => {
+        if (err) {
+            console.error('Error updating can_sell for rejection:', err);
+            return res.status(500).json({ message: 'Failed to reject seller' });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Customer not found' });
+        }
+
+        res.json({ message: 'Seller rejected successfully.' });
+    });
+};
+
 module.exports = {
     listCustomers,
     approveSeller,
+    rejectSeller
 };

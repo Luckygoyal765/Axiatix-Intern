@@ -56,6 +56,7 @@ db.query("SELECT 1", (err) => {
 // ===================== ROUTES =====================
 
 // Auth
+
 app.post("/api/users/send-otp", auth.sendOtp);
 app.post("/api/users/verify-otp", auth.verifyOtp);
 app.post("/api/users/register", auth.register);
@@ -75,6 +76,22 @@ app.get("/api/customer/goats/count", auth.validateSession, auth.isCustomer, cust
 
 // Admin - Can Sell Requests
 app.get("/api/customer/all-can-sell-requests", auth.validateSession, auth.isAdmin, customer.getAllCanSellRequests);
+
+// ... (existing routes)
+
+// Admin - Approve/Reject Can Sell Requests
+app.put("/api/admin/can-sell-requests/:userId/approve", auth.validateSession, auth.isAdmin, admin.approveSeller);
+
+// Add this route for rejecting a seller. You will implement rejectSeller in admin.js next.
+app.put("/api/admin/can-sell-requests/:userId/reject", auth.validateSession, auth.isAdmin, admin.rejectSeller);
+// ... (remaining routes)
+
+
+
+
+
+
+
 
 // Goat Management
 app.post("/api/customer/goats", auth.validateSession, auth.isCustomer, upload.single("image"), goats.addGoat);
@@ -116,5 +133,7 @@ app.post("/api/seller-reviews", auth.validateSession, auth.isCustomer, sellerRev
 app.get("/api/sellers/:id/reviews", sellerReviews.getSellerReviews);
 
 // Server start
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+
+

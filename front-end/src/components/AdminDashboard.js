@@ -129,39 +129,48 @@ function AdminDashboard() {
         fetchHealthRecords(currentHealthPage);
     }, [navigate, currentPage, currentHealthPage]);
 
-    const handleRequestAction = (requestId, action) => {
+    // Inside AdminDashboard.js
+
+    const handleRequestAction = (userId, action) => { // Changed requestId to userId for clarity
         const token = localStorage.getItem('token');
-        fetch('http://localhost:3000/api/customer/handle-can-sell-request', {
-            method: 'POST',
+
+        let endpoint = '';
+        let method = 'PUT'; // Use PUT for updating the status
+
+        if (action === 'approve') {
+            endpoint = `http://localhost:3000/api/admin/can-sell-requests/${userId}/approve`;
+        } else if (action === 'reject') {
+            endpoint = `http://localhost:3000/api/admin/can-sell-requests/${userId}/reject`;
+        } else {
+            console.error('Invalid action:', action);
+            return; // Exit if action is neither 'approve' nor 'reject'
+        }
+
+        fetch(endpoint, {
+            method: method, // This will be 'PUT'
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ requestId, action }),
+            // For PUT requests to these specific endpoints, you don't need a body
+            // because the action (approve/reject) is conveyed by the URL itself.
+            // body: JSON.stringify({ requestId: userId, action }), // Remove this line
         })
-            .then((res) => {
+            .then(async (res) => { // Use async here to await json()
                 if (!res.ok) {
-                    throw new Error(`HTTP error! Status: ${res.status}`);
+                    const errorData = await res.json().catch(() => ({ message: 'No error message from server.' })); // Try to parse error, but catch if not JSON
+                    throw new Error(`HTTP error! Status: ${res.status}: ${errorData.message || res.statusText}`);
                 }
                 return res.json();
             })
             .then((data) => {
-                if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Request Processed',
-                        text: `Request has been ${action}d.`,
-                        confirmButtonColor: '#3085d6',
-                    });
-                    fetchRequests(currentPage);
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Action Failed',
-                        text: data.message || 'Failed to process request.',
-                        confirmButtonColor: '#3085d6',
-                    });
-                }
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Request Processed',
+                    text: data.message || `Request has been ${action}d.`, // Use message from backend
+                    confirmButtonColor: '#3085d6',
+                });
+                fetchRequests(currentPage); // Refresh the list
             })
             .catch((err) => {
                 console.error('Error processing request:', err);
@@ -287,10 +296,10 @@ function AdminDashboard() {
                                                 <td className="p-3">
                                                     <span
                                                         className={`px-2 py-1 rounded-full text-sm ${request.status === 'approved'
-                                                                ? 'bg-green-100 text-green-700'
-                                                                : request.status === 'rejected'
-                                                                    ? 'bg-red-100 text-red-700'
-                                                                    : 'bg-yellow-100 text-yellow-700'
+                                                            ? 'bg-green-100 text-green-700'
+                                                            : request.status === 'rejected'
+                                                                ? 'bg-red-100 text-red-700'
+                                                                : 'bg-yellow-100 text-yellow-700'
                                                             }`}
                                                     >
                                                         {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
@@ -300,13 +309,13 @@ function AdminDashboard() {
                                                     {request.status === 'pending' ? (
                                                         <>
                                                             <button
-                                                                onClick={() => handleRequestAction(request.id, 'approve')}
+                                                                onClick={() => handleRequestAction(request.user_id, 'approve')}
                                                                 className="bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition-colors duration-200"
                                                             >
                                                                 Approve
                                                             </button>
                                                             <button
-                                                                onClick={() => handleRequestAction(request.id, 'reject')}
+                                                                onClick={() => handleRequestAction(request.user_id, 'reject')}
                                                                 className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition-colors duration-200"
                                                             >
                                                                 Reject
@@ -338,8 +347,8 @@ function AdminDashboard() {
                                         onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                                         disabled={currentPage === 1}
                                         className={`px-4 py-2 rounded-lg ${currentPage === 1
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-blue-500 text-white hover:bg-blue-600'
                                             } transition-colors duration-200`}
                                     >
                                         Previous
@@ -351,8 +360,8 @@ function AdminDashboard() {
                                         onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                                         disabled={currentPage === totalPages}
                                         className={`px-4 py-2 rounded-lg ${currentPage === totalPages
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-blue-500 text-white hover:bg-blue-600'
                                             } transition-colors duration-200`}
                                     >
                                         Next
@@ -401,10 +410,10 @@ function AdminDashboard() {
                                                 <td className="p-3">
                                                     <span
                                                         className={`px-2 py-1 rounded-full text-sm ${record.status === 'Healthy'
-                                                                ? 'bg-green-100 text-green-700'
-                                                                : record.status === 'Needs Attention'
-                                                                    ? 'bg-yellow-100 text-yellow-700'
-                                                                    : 'bg-red-100 text-red-700'
+                                                            ? 'bg-green-100 text-green-700'
+                                                            : record.status === 'Needs Attention'
+                                                                ? 'bg-yellow-100 text-yellow-700'
+                                                                : 'bg-red-100 text-red-700'
                                                             }`}
                                                     >
                                                         {record.status}
@@ -425,8 +434,8 @@ function AdminDashboard() {
                                         onClick={() => setCurrentHealthPage((prev) => Math.max(prev - 1, 1))}
                                         disabled={currentHealthPage === 1}
                                         className={`px-4 py-2 rounded-lg ${currentHealthPage === 1
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-blue-500 text-white hover:bg-blue-600'
                                             } transition-colors duration-200`}
                                     >
                                         Previous
@@ -438,8 +447,8 @@ function AdminDashboard() {
                                         onClick={() => setCurrentHealthPage((prev) => Math.min(prev + 1, totalHealthPages))}
                                         disabled={currentHealthPage === totalHealthPages}
                                         className={`px-4 py-2 rounded-lg ${currentHealthPage === totalHealthPages
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-blue-500 text-white hover:bg-blue-600'
                                             } transition-colors duration-200`}
                                     >
                                         Next

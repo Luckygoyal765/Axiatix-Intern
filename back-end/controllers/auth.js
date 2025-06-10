@@ -24,8 +24,8 @@ if (!JWT_SECRET) {
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER || 'registerdigigoat27@gmail.com',
-    pass: process.env.EMAIL_PASS || 'ipob ieyf pmnx gdds',
+    user: process.env.EMAIL_USER || 'registerdigigoat14@gmail.com',
+    pass: process.env.EMAIL_PASS || 'zsubdvcofcqkdlpb',
   },
 });
 
